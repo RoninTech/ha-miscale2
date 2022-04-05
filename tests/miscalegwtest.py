@@ -11,9 +11,9 @@ import time
 height = 178 # height in cm
 
 MISCALE_MAC = '5c:ca:d3:4c:ee:74'
-MQTT_USERNAME = 'smarthome'
-MQTT_PASSWORD = 'seOnly4Me'
-MQTT_HOST = 'mbs.siebler.home'
+MQTT_USERNAME = 'mqttMaster'
+MQTT_PASSWORD = '6CT9w8GEpVBVvDsc8U'
+MQTT_HOST = 'localhost'
 MQTT_PORT = 1883
 MQTT_TIMEOUT = 60
 
