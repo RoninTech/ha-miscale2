@@ -82,6 +82,7 @@ class ScanProcessor():
                     'error': False,
                     "timestamp": str(datetime.today().strftime(DATEFORMAT_MISCAN))
                 }
+                log.debug("New device detected: {}".format(dev.addr))
                 publishDeviceState(MQTT_PREFIX + '/info', payload)
             if isNewData:
                 payload = {
@@ -91,6 +92,7 @@ class ScanProcessor():
                     'error': False,
                     "timestamp": str(datetime.today().strftime(DATEFORMAT_MISCAN))
                 }
+                log.debug("New data detected")
                 publishDeviceState(MQTT_PREFIX + '/info', payload)
             mi2_decoder = Miscale2Decoder(dev)
             mi_data = mi2_decoder.getData()
@@ -99,9 +101,9 @@ class ScanProcessor():
                 mCalc = CalcData(mi_data)
                 if mCalc.ready:
                     publishmode = {
-                        "fulldata": True,
-                        "scores": True,
-                        "simpledata": True,
+                        "fulldata": False,
+                        "scores": False,
+                        "simpledata": False,
                         "influxdb": True
                     }
                     mCalc.publishdata(publishmode)
