@@ -609,7 +609,7 @@ class CalcData():
                 if ifx_flields:
                     log.info("Publish to INFLUXDB: {}, Time:{}, fields:{}".format(measurement, self.data['timestamp'], ifx_flields))
                     ifx.post(ifx_flields, measurement, self.data['timestamp'])
-                    pb = Pushbullet('o.VuNqelNVLM9mSEin534qPu8f8jH4FDst')
+                    pb = Pushbullet(PUSHBULLET_TOKEN)
                     push = pb.push_note(
                         self.user+" Scale Data Detected @ "+self.data['timestamp'], " Pubished to INFLUXDB With Data: "+str(ifx_flields))
                     return True
