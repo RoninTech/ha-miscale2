@@ -7,7 +7,7 @@ sys.path.append("..")
 try:
     import json
     from datetime import datetime
-
+    from dateutil import tz
     from conf import *
     from lib import logger
     from influxdb import InfluxDBClient
@@ -54,9 +54,13 @@ class InfuxdbCient:
                 self.measurement = measurement
                 self.fields = fields
                 if time:
-                    self.time = time
+                    # Influx stores timestamps as UTC.
+                    # Convert from local to UTC.
+                    to_zone = tz.gettz('UTC')
+                    self.time = datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
+                    self.time = self.time.astimezone(to_zone)
                 if self.measurement and self.fields:
-                    log.debug(f"Post data to influxdb {self.host} database: {self.database}")
+                    log.debug(f"Post data to influxdb {self.host} database: {self.database} time: {self.time}")
                     if INFLUXDB_LOG_DIR:
                         self.__savelogdata__(self.fields, self.measurement)
                     self.influxClient.write_points([{
@@ -71,8 +75,8 @@ class InfuxdbCient:
     def get(self, query: str = None):
         try:
             if self.influxClient and query:
-                log.debug(f"Get data to influxdb {self.host} database: {self.database}")
-                return influxClient.query(query)
+                log.debug(f"Get data from influxdb {self.host} database: {self.database} query: {query}")
+                return self.influxClient.query(query)
         except BaseException as e:
             log.error(f"Error {__name__} database: {self.database}, {str(e)} line {sys.exc_info()[-1].tb_lineno}")
             return None
