@@ -9,6 +9,7 @@ try:
     import os.path
     from datetime import datetime, date, timedelta
     import paho.mqtt.publish as publish
+    from pushbullet import Pushbullet
     import time
     import json
     import csv
@@ -261,10 +262,50 @@ class CalcData():
     def getFatfreemassIndex(self, calcmode: str = 'normalised') -> float:
         return round(self.getFatfreemass(calcmode) / ((self.height / 100)**2), 2)
 
+    def whatUserIsThisScaleDataFor(self):
+        # Add some smarts here to figure out which user
+        # the data most likely is for.
+        ifx = influxdata.InfuxdbCient()
+        user1_weight_query = list(ifx.get("SELECT mean(weight) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
+        print(user1_weight_query[0]['mean'])
+
+        user2_weight_query = list(ifx.get("SELECT mean(weight) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())
+        print(user2_weight_query[0]['mean'])
+        
+        user1_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
+
+        user2_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())      
+
+        # Determine who it is from impedance and weight averages
+        user1_weight_delta = abs(self.weight - user1_weight_query[0]['mean'])
+        user2_weight_delta = abs(self.weight - user2_weight_query[0]['mean'])
+        user1_imp_delta = abs(self.impedance - user1_impedance_query[0]['mean'])
+        user2_imp_delta = abs(self.impedance - user2_impedance_query[0]['mean'])
+
+        # Weight deltas are typiclly smaller than impedance so add an offset coefficient
+        user1_detect_score = (user1_weight_delta * WEIGHT_OFFSET_COEFFICIENT) + user1_imp_delta
+        user2_detect_score = (user2_weight_delta * WEIGHT_OFFSET_COEFFICIENT) + user2_imp_delta
+
+        log.info("Weight: {}, {}'s weight mean/delta: {:.2f}/{:.2f}, {}'s weight mean/delta: {:.2f}/{:.2f}".format(
+            self.weight, USER1_NAME, user1_weight_query[0]['mean'], user1_weight_delta, USER2_NAME, user2_weight_query[0]['mean'], user2_weight_delta))
+        log.info("Impedance: {}, {}'s impedance mean/delta: {:.2f}/{:.2f}, {}'s impedance mean/delta: {:.2f}/{:.2f}".format(
+            self.impedance, USER1_NAME, user1_impedance_query[0]['mean'], user1_imp_delta, USER2_NAME, user2_impedance_query[0]['mean'], user2_imp_delta))
+
+        if user1_detect_score < user2_detect_score:
+            user = USER1_NAME
+            log.info("{}'s detection score of {:.2f} is lower than {}'s score of {:.2f} so data is from {}".format(
+                USER1_NAME, user1_detect_score, USER2_NAME, user2_detect_score, USER1_NAME))
+        else:
+            user = USER2_NAME
+            log.info("{}'s detection score of {:.2f} is lower than {}'s score of {:.2f} so data is from {}".format(
+                USER2_NAME, user2_detect_score, USER1_NAME, user1_detect_score, USER2_NAME))
+        return user
+
     def __setUserData__(self):
         if self.data:
             self.user = self.user
-            if int(self.weight) > USER1_GT:
+            detected_user = self.whatUserIsThisScaleDataFor()
+            if detected_user == USER1_NAME:
                 self.user = USER1_NAME
                 self.height = USER1_HEIGHT
                 self.dob = USER1_DOB
@@ -278,7 +319,7 @@ class CalcData():
                     self.userscores = USER1_SCORES
                 self.userid = "USER1"
 
-            elif int(self.weight) < USER2_LT:
+            elif detected_user == USER2_NAME:
                 self.user = USER2_NAME
                 self.height = USER2_HEIGHT
                 self.dob = USER2_DOB
@@ -293,18 +334,7 @@ class CalcData():
                 self.userid = "USER2"
 
             else:
-                self.user = USER3_NAME
-                self.height = USER3_HEIGHT
-                self.dob = USER3_DOB
-                if self.useAgeCalc:
-                    self.age = self.__getAge__()
-                self.sex = USER3_SEX
-                self.athletic = USER3_ATHLETIC
-                if USER3_ADJUSTMENTS and USER3_ATHLETIC:
-                    self.adjustments = USER3_ADJUSTMENTS
-                if USER3_SCORES:
-                    self.userscores = USER3_SCORES
-                self.userid = "USER3"
+               log.error("Unknown User for rx'd data!")
 
             log.debug("User data loaded  for {}".format(self.user))
 
@@ -584,6 +614,9 @@ class CalcData():
                 if ifx_flields:
                     log.info("Publish to INFLUXDB: {}, Time:{}, fields:{}".format(measurement, self.data['timestamp'], ifx_flields))
                     ifx.post(ifx_flields, measurement, self.data['timestamp'])
+                    pb = Pushbullet('o.VuNqelNVLM9mSEin534qPu8f8jH4FDst')
+                    push = pb.push_note(
+                        self.user+" Scale Data Detected @ "+self.data['timestamp'], " Pubished to INFLUXDB With Data: "+str(ifx_flields))
                     return True
 
             except BaseException as e:
