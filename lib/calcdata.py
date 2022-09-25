@@ -267,13 +267,8 @@ class CalcData():
         # the data most likely is for.
         ifx = influxdata.InfuxdbCient()
         user1_weight_query = list(ifx.get("SELECT mean(weight) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
-        print(user1_weight_query[0]['mean'])
-
         user2_weight_query = list(ifx.get("SELECT mean(weight) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())
-        print(user2_weight_query[0]['mean'])
-        
         user1_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
-
         user2_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())      
 
         # Determine who it is from impedance and weight averages
