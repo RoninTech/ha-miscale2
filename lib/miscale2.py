@@ -32,7 +32,10 @@ def last_timeStamp(action: str = "set", value: str = None):
             LAST_TIMESTAMP = str(datetime.today().strftime(DATEFORMAT_MISCAN))
     if action == 'get':
         if LAST_TIMESTAMP is None:
-            LAST_TIMESTAMP = str(datetime.today().strftime(DATEFORMAT_MISCAN))
+            # datetime.today() can cause recent scale data to be ignored.
+            # Changing to datetime.min could cause duplicate writes in to the DB.
+            # influx can handle duplicate writes, so use datetime.min.
+            LAST_TIMESTAMP = str(datetime.min.strftime(DATEFORMAT_MISCAN))
         return LAST_TIMESTAMP
 
 
@@ -204,7 +207,7 @@ class Miscale2Decoder():
 
     def __decodedata__(self):
 
-        log.info("Device {} {} {} dBm. Lastscan:{}".format(self.bledevice.addr, self.bledevice.addrType, self.bledevice.rssi, self.lastscan))
+        log.debug("Device {} {} {} dBm. Lastscan:{}".format(self.bledevice.addr, self.bledevice.addrType, self.bledevice.rssi, self.lastscan))
 
         # log.debug("Scandata:{}".format(self.bledevice.getScanData()))
         # Scandata:[
@@ -250,7 +253,7 @@ class Miscale2Decoder():
 
                 if data.startswith(MI2_SCALE2ID) and sdid == MI2_DATAREADY:
 
-                    log.debug("SSID:{}, Type:{}".format(sdid, data[1:4]))
+                    log.debug("Scale Data Ready SSID:{}, Type:{}".format(sdid, data[1:4]))
 
                     self.scaninfo = "{}-{}-{}".format(sdid, desc, data)
 
@@ -278,13 +281,15 @@ class Miscale2Decoder():
 
                         # get timestamp from the device
                         self.timestamp = self.__decodeTimestamp__()
-
+                        log.debug("__decodedata__ has impedance: {}, time: {}, lastscan: {}".format(
+                            self.impedance, self.timestamp, self.lastscan))
                         self.__publishStateInfo__()
 
                         # final check and build result data
                         if self.timestamp and (str(self.timestamp) > self.lastscan):
                             self.lastscan = str(self.timestamp)
                             last_timeStamp('set', str(self.timestamp))
+                            log.debug("__decodedata__ setting results")
                             self.__setResults__()
 
                     else:
@@ -295,11 +300,11 @@ class Miscale2Decoder():
                     # (1, 'Flags', '06'),
                     # (2, 'Incomplete 16b Services', '0000181b-0000-1000-8000-00805f9b34fb'),
                     # (9, 'Complete Local Name', 'MIBFS'),
-                    log.debug(("SSID:{}, Data:{}").format(sdid, data))
+                    log.debug(("Data, No Service or Local Name - SSID:{}, Data:{}").format(sdid, data))
                     continue
                 elif sdid == MI2_MANUFACTORID:
                     # (255, 'Manufacturer', '57015ccad34cee74')
-                    log.debug(("SSID:{}, Data:{}").format(sdid, data))
+                    log.debug(("ManufactorID - SSID:{}, Data:{}").format(sdid, data))
                     continue
                 else:
                     log.error("New unknown packet: type={} data={} !".format(sdid, data))
