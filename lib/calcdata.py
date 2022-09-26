@@ -264,27 +264,36 @@ class CalcData():
 
     def whatUserIsThisScaleDataFor(self):
         # Add some smarts here to figure out which user
-        # the data most likely is for.
+        # the data most likely is for.  Get the average weight and (optional)
+        # average impedance from the existing data. 
         ifx = influxdata.InfuxdbCient()
         user1_weight_query = list(ifx.get("SELECT mean(weight) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
         user2_weight_query = list(ifx.get("SELECT mean(weight) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())
-        user1_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
-        user2_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())      
 
-        # Determine who it is from impedance and weight averages
+        # How far is the weight reading from each user's average.
         user1_weight_delta = abs(self.weight - user1_weight_query[0]['mean'])
         user2_weight_delta = abs(self.weight - user2_weight_query[0]['mean'])
-        user1_imp_delta = abs(self.impedance - user1_impedance_query[0]['mean'])
-        user2_imp_delta = abs(self.impedance - user2_impedance_query[0]['mean'])
-
-        # Weight deltas are typiclly smaller than impedance so add an offset coefficient
-        user1_detect_score = (user1_weight_delta * WEIGHT_OFFSET_COEFFICIENT) + user1_imp_delta
-        user2_detect_score = (user2_weight_delta * WEIGHT_OFFSET_COEFFICIENT) + user2_imp_delta
 
         log.info("Weight: {}, {}'s weight mean/delta: {:.2f}/{:.2f}, {}'s weight mean/delta: {:.2f}/{:.2f}".format(
-            self.weight, USER1_NAME, user1_weight_query[0]['mean'], user1_weight_delta, USER2_NAME, user2_weight_query[0]['mean'], user2_weight_delta))
-        log.info("Impedance: {}, {}'s impedance mean/delta: {:.2f}/{:.2f}, {}'s impedance mean/delta: {:.2f}/{:.2f}".format(
-            self.impedance, USER1_NAME, user1_impedance_query[0]['mean'], user1_imp_delta, USER2_NAME, user2_impedance_query[0]['mean'], user2_imp_delta))
+            self.weight, USER1_NAME, user1_weight_query[0]['mean'], user1_weight_delta, 
+            USER2_NAME, user2_weight_query[0]['mean'], user2_weight_delta))
+            
+        # Weight deltas are typically smaller than impedance so add an offset coefficient
+        user1_detect_score = user1_weight_delta * WEIGHT_OFFSET_COEFFICIENT
+        user2_detect_score = user2_weight_delta * WEIGHT_OFFSET_COEFFICIENT
+
+        # If configured, add in impedance to the user determination.
+        if USE_WEIGHT_AND_IMPEDANCE_FOR_USER_DETECTION:
+            user1_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER1_NAME.lower()).get_points())
+            user2_impedance_query = list(ifx.get("SELECT mean(impedance) FROM historydata.autogen.miscale_"+USER2_NAME.lower()).get_points())           
+            user1_imp_delta = abs(self.impedance - user1_impedance_query[0]['mean'])
+            user2_imp_delta = abs(self.impedance - user2_impedance_query[0]['mean'])
+            user1_detect_score += user1_imp_delta
+            user2_detect_score += user2_imp_delta
+
+            log.info("Impedance: {}, {}'s impedance mean/delta: {:.2f}/{:.2f}, {}'s impedance mean/delta: {:.2f}/{:.2f}".format(
+                self.impedance, USER1_NAME, user1_impedance_query[0]['mean'], user1_imp_delta, 
+                USER2_NAME, user2_impedance_query[0]['mean'], user2_imp_delta))
 
         if user1_detect_score < user2_detect_score:
             user = USER1_NAME
